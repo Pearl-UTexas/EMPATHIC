@@ -1,5 +1,9 @@
-# Code for paper "The EMPATHIC Framework for Task Learning from Implicit Human Feedback"
+# Code for paper "[The EMPATHIC Framework for Task Learning from Implicit Human Feedback](https://arxiv.org/abs/2009.13649)"
 
+
+## Clone the Repository
+
+`git clone --recursive https://github.com/Pearl-UTexas/EMPATHIC.git`
 
 ## Requirements
 All modules require Python 3.6 or above. 
@@ -17,37 +21,6 @@ python -m pip install --upgrade -r requirements.txt
 
 ---------------------------------------------------------------------------------------
 
-## Robotaxi Environment: Robotaxi
-(Game Logic Modified from repository: [snake-ai-reinforcement](https://github.com/YuriyGuts/snake-ai-reinforcement))
-
-
-Test Robotaxi and control by yourself (using the arrow keys):
-```
-python play.py --agent human
-```
-
-Watch a psuedo optimal agent:
-```
-python play.py --agent val-itr
-```
-
-Watch an agent with mixed policy:
-```
-python play.py --agent mixed
-```
-
-## Data collection script
-
-Script to play back recordings for collection human reactions (different condition number corresponds to different episode):
-```
-python start_data_collection.py --cond [0,1,..,5] 
-```
-
-## Playback Recordings
-To playback recorded behavior (use --save_frames to save individual game frames as images):
-```
-python render_from_log.py --log_file <log_file_name> [--original] [--save_frames]
-```
 
 ## Test Online Learning
 
@@ -62,13 +35,13 @@ python online_learning.py
 
 ---------------------------------------------------------------------------------------
 
-## Supervised Learning
-Since the dataset used in this paper is collected by ourselves and exceeds the maximum size limit of submission, the data is not included here and the training scripts below are not runnable for now. They will be available as soon as the final version of paper is released.
+## Training Human Reaction Mappings
+- Download the pre-processed [dataset]()
 
 Important files:
 - `network_facs.py`: network architecture
-- `data_loader_facs.py`: data loading logic (preprocessing) for per-subject datasets
-- `data_loader_all.py `: data loading logic (preprocessing) for single-model dataset
+- `data_loader_facs.py`: data loading logic for per-subject datasets
+- `data_loader_all.py `: data loading logic for single-model dataset (final evaluation)
 - `train_mlp_net_facs.py`: training script  for per-subject datasets
 - `train_mlp_net_facsall.py`: training script for single-model dataset
 
