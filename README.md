@@ -45,11 +45,4 @@ Important files:
 - `train_mlp_net_facs.py`: training script  for per-subject datasets
 - `train_mlp_net_facsall.py`: training script for single-model dataset
 
-## Train Supervised Learning for preidicting RL Statistics from Facial Features
-```
-$ python train_mlp_net_facs.py <subj_id>
-```
-or 
-```
-$ python train_mlp_net_facsall.py
-```
+
