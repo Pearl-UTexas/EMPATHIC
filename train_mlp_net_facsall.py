@@ -236,4 +236,4 @@ for epoch in range(num_epochs):
                 print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f, Classification_Loss: %.4f, Binary_Classification_Loss: %.4f, MSE_loss: %.4f' 
                %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data.item(), loss1.data.item(),  loss2.data.item(), loss3.data.item()))
 
-torch.save(best_model_wts, 'MLP_detector_reward_models/facsposeauxall_'+str(np.round(lowest_loss,4))+'.pkl')
+torch.save(best_model_wts, 'MLP_facs_reward_models/all_subjects_model.pkl')
