@@ -2,13 +2,13 @@
 
 Yuchen Cui*, Qiping Zhang*, Alessandro Allievi, Peter Stone, Scott Niekum, W. Bradley Knox
 
-<p align="center">
-  <a href="https://arxiv.org/abs/2009.13649">View on ArXiv</a> |
+<p align="left">
+  <a href="https://arxiv.org/abs/2009.13649">View paper on ArXiv</a> |
   <a href="https://sites.google.com/utexas.edu/empathic">Project Website</a>
 </p>
 
 
-Overview of EMPATHIC:
+Overview of the EMPATHIC framework:
 <p align=center>
   <img src='assets/EMPATHIC_overview.png' width=1000>
 </p>
@@ -30,7 +30,7 @@ If you find this repository is useful in your research, please cite the paper:
 # Instructions for running source code
 
 
-## Clone the Repository
+## Clone the Repository 
 
 ```git clone --recursive https://github.com/Pearl-UTexas/EMPATHIC.git```
 
@@ -72,12 +72,11 @@ Download the pre-processed dataset from [here](https://drive.google.com/file/d/1
 python train_mlp_net_facs.py WkOsToXr9v
 ```
 
-This will generate a model file "WkOsToXr9v_model.pkl" of the trained MLP in the directory MLP_facs_reward_models/, for the human subject with ID "WkOsToXr9v". 
+This will generate a model file "WkOsToXr9v_model.pkl" of the trained MLP in the directory MLP_facs_reward_models/, for testing on the human subject data with ID "WkOsToXr9v". 
 
 Note that if you would like to train a model for another subject, you need to make sure the processed data of that subject already exists in a subdirectory with the name of his/her ID, under the folder detected/. 
 
-The models are used for reward ranking task of each subject on holdout set.
-
+Per-subject models are used for random search of hyper-parameters.
 
 ### Training on single-model dataset
 ```
@@ -86,8 +85,7 @@ python train_mlp_net_facsall.py
 
 This will generate a model file "all_subjects_model.pkl" of the trained MLP in the directory MLP_facs_reward_models/. 
 
-The model are used for reward ranking task in online learning and robotic sorting task.
-
+The trained model is used for evaluating data in holdout set.
 
 ## Predicting Reward Rankings
 
