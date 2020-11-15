@@ -1,4 +1,4 @@
-[submodule "RoboTaxiEnv"]
-	path = RoboTaxiEnv
-	url = https://github.com/Pearl-UTexas/RoboTaxiEnv.git
+[submodule "RobotaxiEnv"]
+	path = RobotaxiEnv
+	url = https://github.com/Pearl-UTexas/RobotaxiEnv.git
 	branch = master
