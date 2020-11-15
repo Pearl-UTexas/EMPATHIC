@@ -6,6 +6,9 @@ import json
 import sys, os
 import numpy as np
 
+import os
+sys.path.insert(1, "./RobotaxiEnv")
+
 from robotaxi.gameplay.environment import Environment
 from robotaxi.gui import PyGameGUI
 from robotaxi.utils.cli import HelpOnFailArgumentParser
@@ -39,7 +42,7 @@ def parse_command_line_args(args):
     parser.add_argument(
         '--level',
         type=str,
-        default='./robotaxi/levels/8x8-blank.json',
+        default='./RobotaxiEnv/robotaxi/levels/8x8-blank.json',
         help='JSON file containing a level definition.',
     )
     parser.add_argument(
