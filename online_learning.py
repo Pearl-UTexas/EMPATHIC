@@ -42,7 +42,7 @@ def parse_command_line_args(args):
     parser.add_argument(
         '--level',
         type=str,
-        default='./RoboTaxiEnv/robotaxi/levels/8x8-blank.json',
+        default='./RobotaxiEnv/robotaxi/levels/8x8-blank.json',
         help='JSON file containing a level definition.',
     )
     parser.add_argument(
