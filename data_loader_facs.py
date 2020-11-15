@@ -25,12 +25,7 @@ condition_dic = {
     "pKH0e6bBIo":0,    "G4fUr3vTFO":0,    "Oz4PI7OLOi":0,    "YBVcCZS7fy":0,
     "6cMbVYpG00":0,    "fYWPkRcKi1":0,    "BDRiXPwtNf":0,    "WkOsToXr9v":0,
     "S6Zghgggo4":0,    "Kpd16ANmf3":0,    "SoQ2uxHSHw":0,    "oI7RlzkU2k":0,
-    "2iA4jV97rl":0,    "J4LTGkh8bC":1,    "tcJ5dqCJkz":1,    "eneTslHMcV":1,
-    "Z2pZR2LQxg":1,    "3gCI2rjrdp":1,    "B9ASGFKtcI":1,    "GHiCGHgING":1,
-    "5uKjBzbCUY":1,    "fNzfYRiG2Q":1,    "8EwwxdFc3G":1,    "1JIuegvQCL":1,
-    "eBIJoBu3xw":1,    "NvWqZhMTIr":1,    "Gm2fspTh0O":1,    "SYf80nuPOV":1,
-    "gSSEPyUoeT":1,    "xNWYOcsU9X":1,    "2Lk7llB0CT":1,    "bo3OrtQR5v":1,
-    "qU8Frq52yW":1
+    "2iA4jV97rl":0
                 }
 
 # The human subjects that are included in training our model
