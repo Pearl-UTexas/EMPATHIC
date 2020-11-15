@@ -7,7 +7,7 @@ import sys, os
 import numpy as np
 
 import os
-sys.path.insert(1, "./RobotaxiEnv")
+sys.path.insert(1, "/home/yuchen/projects/RoboTaxiEnv")
 
 from robotaxi.gameplay.environment import Environment
 from robotaxi.gui import PyGameGUI
@@ -42,7 +42,7 @@ def parse_command_line_args(args):
     parser.add_argument(
         '--level',
         type=str,
-        default='./RobotaxiEnv/robotaxi/levels/8x8-blank.json',
+        default='./RoboTaxiEnv/robotaxi/levels/8x8-blank.json',
         help='JSON file containing a level definition.',
     )
     parser.add_argument(
@@ -98,7 +98,7 @@ def load_model(filename):
     return load_model(filename)
 
 
-def create_agent(name, model, dimension, env, reward_mapping=None):
+def create_agent(name, model, dimension, env, participant=None, reward_mapping=None):
     """
     Create a specific type of Robotaxi AI agent.
     
@@ -121,7 +121,7 @@ def create_agent(name, model, dimension, env, reward_mapping=None):
     elif name == 'mixed':
         return MixedActionAgent(grid_size=dimension, env=env)   
     elif name == 'reward-learning':
-        return RewardLearningAgent()
+        return RewardLearningAgent(participant)
    
     raise KeyError(f'Unknown agent type: "{name}"')
 
@@ -141,7 +141,7 @@ def play_gui(env, agent, agent_name, num_episodes, save_frames, field_size, coll
     gui.load_environment(env)
     gui.load_agent(agent, agent_name)
     
-    gui.run(num_episodes=num_episodes, participant=participant)
+    gui.run(num_episodes=num_episodes, participant=participant, online_learning=True)
     
    
 def main():
@@ -156,14 +156,17 @@ def main():
     collaborator_model = None
     collaborating_agent =  None
     dimension = int(parsed_args.level.split('/')[-1].split('x')[0])
-    agent = create_agent(parsed_args.agent, model, dimension, env)   
+    #agent = create_agent(parsed_args.agent, model, dimension, env)   
+    agent = create_agent(parsed_args.agent, model, dimension, env, participant=parsed_args.participant)
     
-    proc = subprocess.Popen(['/bin/bash','start_openface.bash'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    #proc = subprocess.Popen(['/bin/bash','start_openface.bash'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    proc = subprocess.Popen(['/bin/bash','start_openface.bash',parsed_args.participant], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
     play_gui(env, agent, parsed_args.agent, num_episodes=parsed_args.num_episodes, save_frames=parsed_args.save_frames, field_size=dimension, collaborating_agent=collaborating_agent, collaborating_agent_name=collaborating_agent, participant=parsed_args.participant, test=parsed_args.test_run)
     proc.stdout.close()
-    proc.wait()
-    try:        
+    proc.wait()    
+    try:      
+        proc.kill()  
         os.killpg(os.getpgid(proc.pid), signal.SIGTERM) 
     finally:
         sys.exit()
