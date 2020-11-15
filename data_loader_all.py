@@ -7,10 +7,7 @@ import pandas as pd
 import numpy as np
 import imageio
 
-
-
-# dataset meta info
-
+# Dataset meta info
 data_files = {
                2: 'detected/RLstatistics_episode_2.csv',
               30: 'detected/RLstatistics_episode_30.csv',           
@@ -20,7 +17,9 @@ data_files = {
               46: 'detected/RLstatistics_episode_46.csv'
               }
               
-# conditions
+# Conditions of experiment on each human subject
+# Some of the subjects in pilot study are not included in our formal experiments
+# Refer to the directory detected/ to see the human subjects actually used for training
 condition_dic = {
     "NUmTnWWjX6":0,    "4bzq92vQGe":0,    "lxJtNRlUAs":0,    "J3sGDFKNx5":0,
     "pKH0e6bBIo":0,    "G4fUr3vTFO":0,    "Oz4PI7OLOi":0,    "YBVcCZS7fy":0,
@@ -34,6 +33,7 @@ condition_dic = {
     "qU8Frq52yW":1
                 }
 
+# The human subjects that are included in training our model
 unconditioned = [
     "NUmTnWWjX6",    "4bzq92vQGe",    "lxJtNRlUAs",    "J3sGDFKNx5",
     "pKH0e6bBIo",    "G4fUr3vTFO",    "Oz4PI7OLOi",    "YBVcCZS7fy",
@@ -43,7 +43,8 @@ unconditioned = [
                  ]
 
 
-def load_feature_data(test_subj, detected_dir = './detected', feature='detectionFrames', condition=0, test=False, evaluating=False, use_holdout=False, filter_subject=False, finetune=False, subj_reaction_level_threshold=0.0):
+# Load the data required for learning from the csv files under detected/
+def load_feature_data(test_subj, detected_dir = './detected', feature='detectionFrames', condition=0, test=False, evaluating=False, use_holdout=False):
 
     print('Restoring image info from ', detected_dir)
     subj_idxed_feature_data = {}
@@ -58,10 +59,9 @@ def load_feature_data(test_subj, detected_dir = './detected', feature='detection
         if evaluating and subj_id != test_subj: continue
         if use_holdout and subj_id != test_subj: continue
        
-        # compute detection frame indexes
+        # compute aggregated frame indexes
         hash_num = sum([ord(test_subj[ch_idx]) for ch_idx in range(len(test_subj))]) + sum([ord(subj_id[ch_idx]) for ch_idx in range(len(subj_id))])
         hash_test_idx = hash_num % 4
-        
         
         subj_idxed_feature_data[subj_id] = {}
         # list all the episodes under the file
@@ -85,53 +85,53 @@ def load_feature_data(test_subj, detected_dir = './detected', feature='detection
             if not episode_num in subj_idxed_feature_data[subj_id]:
                 subj_idxed_feature_data[subj_id][episode_num] = {}
             subj_idxed_feature_data[subj_id][episode_num][k] = pd.read_csv(feature_file, header=None)
-    for subj in subj_idxed_feature_data.keys():
-        print(subj, subj_idxed_feature_data[subj].keys())
-        print([subj_idxed_feature_data[subj][e_num].keys() for e_num in subj_idxed_feature_data[subj]])
+    
     return subj_idxed_feature_data
     
     
 class FaceFeatureDataset(Dataset):
     """Face Feature dataset."""
 
-    def __init__(self, subject_under_test='5uKjBzbCUY', data_dir='detected/', target_idx=1, regression=False, 
+    def __init__(self, subject_under_test='WkOsToXr9v', data_dir='detected/', target_idx=1, regression=False, 
                        test=False,  evaluating=False, use_holdout=False,
                        threshold_percentile=0,
                        balance_data=True,
-                       filter_subject=False, subj_reaction_level_threshold=0.20,
                        frames_pre=2, frames_after=24,
-                       binary_classification=False,
-                       include_delta_feature = False,
-                       finetune=False
+                       include_delta_feature = False
                  ):
        
         """
         Args:
-            subject_under_test: the subject will be evaluated on, use the
-                                rest of other subjects under the same condition for train + test. 
-            data_dir:           root directory saving all data files  
+            subject_under_test: the subject will be evaluated on, not applicable for the single model trained on all subjects. 
+            data_dir:           root directory saving all data files
+            target_idx:         the index of the target statistic to learn and predict.
+            regression:         whether to predict other continuous tasks statistics (Q-values, advantage) or not; Currently should always be False (reward only).
+            test:               whether to load the test set.
+            evaluating:         whether to load the validation set.
+            use_holdout:        whether to load the holdout set.
+            threshold_precentile: the threshold for sampling subjects with high reaction level; Currently not used.
+            balance_data:       whether to balance the data instances based on class distribution.
+            frames_pre:         the number of aggregated frames before the current one in the window.
+            frames_after:       the number of aggregated frames after the current one in the window.
+            include_delta_feature: whether to inlclude delta feature w.r.t the previous frame as an additional feature. Currently not used.
         """
         
         self.subject_under_test = subject_under_test
-        self.subj_idxed_feature_frames = load_feature_data(subject_under_test, detected_dir=data_dir, condition=condition_dic[subject_under_test], test=test, evaluating=evaluating, use_holdout=use_holdout, filter_subject=filter_subject, subj_reaction_level_threshold=subj_reaction_level_threshold, finetune=finetune)       
+        self.subj_idxed_feature_frames = load_feature_data(subject_under_test, detected_dir=data_dir, condition=condition_dic[subject_under_test], test=test, evaluating=evaluating, use_holdout=use_holdout)
         self.feature_start_index = 2        
         self.feature_size = 512 + 61 + 35 + 54 + 40 + 10
         self.feature_end_index = self.feature_start_index + self.feature_size
         self.threshold_percentile = threshold_percentile
         self.include_delta_feature = include_delta_feature
-        self.filter_subject = filter_subject
         
         self.targets_frames = {}
         for data_file_id in data_files:
             self.targets_frames[data_file_id] = pd.read_csv(data_files[data_file_id])
-        self.target_idx = target_idx # timestep 1.reward 2.optimality 3.qval_opt 4.qval_beh 5.adv_opt 6.adv_beh 7.suprise r(t-1) t(t-2)
-        self.binary_classification = binary_classification
+        self.target_idx = target_idx
 
+        # Mappings to convert reward values to classes for training.
         if self.target_idx == 1:  
-            if self.binary_classification:
-                self.weight_mappings = {-5:0, -1:0, 6:1, 0:2}
-            else:
-                self.weight_mappings =  {-5:0, -1:1, 6:2, 0:3}
+            self.weight_mappings =  {-5:0, -1:1, 6:2, 0:3}
             self.binary_weight_mappings = {-5:0, -1:0, 6:1, 0:2}
         elif self.target_idx == 2: 
             self.weight_mappings =  {0:0, 1:1}
@@ -139,19 +139,17 @@ class FaceFeatureDataset(Dataset):
         self.frames_pre = frames_pre
         self.frames_after = frames_after
         self.window_size = self.frames_pre + self.frames_after + 1
-        self.class_weights = list(np.ones(3)) if not self.binary_classification else list(np.ones(2))
-        self.binary_class_weights = list(np.ones(2))
+        self.class_weights = list(np.ones(3))
         self.threshold = 0.0
        
         self.generate_training_data()
         
-        #self.data_size = len(self.targets_frame)
         print('Dataset size:', self.data_size)
         print('Input feature size:',self.feature_size)
         print('Target idx:', self.target_idx)
         print('Threshold Percentile:', self.threshold_percentile)
-        #if self.filter_subject and not self.binary_classification:
         print('Threshold value:', self.threshold)
+
         self.label_distribution = None
         if balance_data and not regression:  
             self.balance_data_by_class()
@@ -169,11 +167,13 @@ class FaceFeatureDataset(Dataset):
         self.subj_ids = []
         self.annot_targets = []
         
-        # preprocess data
+        # Preprocess data into numpy arrays
         for subj_id in self.subj_idxed_feature_frames:
+
             for episode_num in self.subj_idxed_feature_frames[subj_id]:
                 targets_frame = self.targets_frames[episode_num]
                 prev_img_feature = None
+
                 for k in self.subj_idxed_feature_frames[subj_id][episode_num]:
                     curr_dataframe = self.subj_idxed_feature_frames[subj_id][episode_num][k]
                     curr_data_size = len(curr_dataframe)
@@ -192,11 +192,8 @@ class FaceFeatureDataset(Dataset):
 
                         img_feature = np.array(curr_dataframe.iloc[data_idx, self.feature_start_index:self.feature_end_index]).astype('float')
                         annot_target =  np.array(curr_dataframe.iloc[data_idx, self.feature_end_index-10:self.feature_end_index]).astype('float')
-                        #window_idxes = np.array(curr_dataframe.iloc[data_idx, 0]).astype('int')
                         event_mask = []
                         frame_num = int(curr_dataframe.iloc[idx, 0])
-                        #if targets_frame.iloc[int(curr_dataframe.iloc[idx, 0]), 1] != 0: event_mask.append(1.0) # Whether reward==0
-                        #else:  event_mask.append(0.0)
                         event_mask.append(frame_num//50)
 
                         mean_max_reaction_level = np.mean(np.amax(np.clip(img_feature[:,512+61:512+61+35],0.0,1.0), axis=1))
@@ -207,20 +204,21 @@ class FaceFeatureDataset(Dataset):
                             delta_feature = img_feature - prev_img_feature
                         prev_img_feature = img_feature
 
+                        # Whether or not include delta feature with regards to previous frame.
+                        # Currently not used.
                         if self.include_delta_feature:
                             self.processed_training_data.append(np.concatenate((img_feature, delta_feature), axis=0))
                         else:
-                            #self.processed_training_data.append(delta_feature) 
                             self.processed_training_data.append(img_feature)
+
                         self.annot_targets.append(annot_target.flatten())
                         tar_idx = int(curr_dataframe.iloc[idx, 0])
-                        #print(tar_idx)
                         self.targets_data.append(int(targets_frame.iloc[tar_idx, self.target_idx]))
                         self.reaction_levels.append(mean_max_reaction_level)
                         self.event_masks.append(np.array(event_mask))
                         self.subj_ids.append(subj_id)
                                     
-        # Convert to np array for better indexing
+        # Convert to np array for better indexing.
         self.processed_training_data = np.array(self.processed_training_data)
         self.targets_data = np.array(self.targets_data)
         self.reaction_levels = np.array(self.reaction_levels)
@@ -228,7 +226,7 @@ class FaceFeatureDataset(Dataset):
         self.subj_ids = np.array(self.subj_ids)
         self.annot_targets = np.array(self.annot_targets)
 
-        # Filter classes
+        # Filter classes, only keep the timesteps with non-zero rewards (events occurred).
         sampled_indices = np.squeeze(np.argwhere(abs(self.targets_data) > 0))
 
         self.processed_training_data = self.processed_training_data[sampled_indices]
@@ -238,10 +236,11 @@ class FaceFeatureDataset(Dataset):
         self.subj_ids = self.subj_ids[sampled_indices]
         self.annot_targets = self.annot_targets[sampled_indices]
 
+        # Originally used for sampling data in which humans have high reaction levels.
+        # Currently not used, keeping all reaction data.
         # Get the threshold by percentile
         if self.threshold_percentile > 0:
-            #threshold = np.percentile(self.reaction_levels, self.threshold_percentile)
-            self.threshold = 0.5 #threshold
+            self.threshold = 0.5
             sampled_indices = np.squeeze(np.argwhere(self.reaction_levels > self.threshold))
 
             # Sample by thresholded indices
@@ -252,10 +251,10 @@ class FaceFeatureDataset(Dataset):
             self.subj_ids = self.subj_ids[sampled_indices]
             self.annot_targets = self.annot_targets[sampled_indices]
 
-        # self.data_size = len(self.processed_training_data)
-        self.data_size = int(self.processed_training_data.shape[0])#(1-0.01*self.threshold_percentile)*self.data_size)
+        self.data_size = int(self.processed_training_data.shape[0])
 
 
+    # Balance the data instances in training by changing sample weights.
     def balance_data_by_class(self):
         labels = [self.weight_mappings[target] for target in self.targets_data]
         counts, _ = np.histogram(labels, bins=range(len(self.class_weights)+1))
@@ -265,6 +264,7 @@ class FaceFeatureDataset(Dataset):
         self.update_sample_weights(class_weights)
 
 
+    # Update the sample weights of classes based on their distribution.
     def update_sample_weights(self, class_weights):
         self.class_weights = class_weights
         self.sample_weights = []
@@ -282,10 +282,7 @@ class FaceFeatureDataset(Dataset):
         return self.data_size
 
     def __getitem__(self, idx):
-        """
-        Logic for loading one training instance.
-        """
-        
+        # Logic for loading one training instance.
         if torch.is_tensor(idx):
             idx = idx.tolist()
         
@@ -302,26 +299,4 @@ class FaceFeatureDataset(Dataset):
         else: 
             label = np.array(target)
 
-        return (img_feature, label, subj_id, event_mask, binary_labels, annot_target)    
-    
-
-
-if __name__ == '__main__':
-    import torch.nn as nn
-    from torch.autograd import Variable
-    criterion = nn.NLLLoss()
-    dataset_num = 1
-    
-    #train_dataset = FaceFeatureDataset(subject_under_test='tcJ5dqCJkz')
-    test_dataset = FaceFeatureDataset(subject_under_test='G4fUr3vTFO',test=True, data_dir='detected/')
-    print(len(test_dataset.processed_training_data))
-    print(test_dataset.data_size)
-    # Data Loader (Input Pipeline)
-    batch_size=32
-    test_loader = torch.utils.data.DataLoader(dataset=test_dataset, 
-           batch_size=batch_size, sampler=test_dataset.sampler)    
-
-    for (img_features, labels, _, event_mask, binary_labels, annot_target) in test_loader:
-        print(img_features.shape, labels.shape, binary_labels.shape, annot_target.shape)
-        
-        
+        return (img_feature, label, subj_id, event_mask, binary_labels, annot_target)
