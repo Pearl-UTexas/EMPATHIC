@@ -25,7 +25,12 @@ condition_dic = {
     "pKH0e6bBIo":0,    "G4fUr3vTFO":0,    "Oz4PI7OLOi":0,    "YBVcCZS7fy":0,
     "6cMbVYpG00":0,    "fYWPkRcKi1":0,    "BDRiXPwtNf":0,    "WkOsToXr9v":0,
     "S6Zghgggo4":0,    "Kpd16ANmf3":0,    "SoQ2uxHSHw":0,    "oI7RlzkU2k":0,
-    "2iA4jV97rl":0
+    "2iA4jV97rl":0,    "J4LTGkh8bC":1,    "tcJ5dqCJkz":1,    "eneTslHMcV":1,
+    "Z2pZR2LQxg":1,    "3gCI2rjrdp":1,    "B9ASGFKtcI":1,    "GHiCGHgING":1,
+    "5uKjBzbCUY":1,    "fNzfYRiG2Q":1,    "8EwwxdFc3G":1,    "1JIuegvQCL":1,
+    "eBIJoBu3xw":1,    "NvWqZhMTIr":1,    "Gm2fspTh0O":1,    "SYf80nuPOV":1,
+    "gSSEPyUoeT":1,    "xNWYOcsU9X":1,    "2Lk7llB0CT":1,    "bo3OrtQR5v":1,
+    "qU8Frq52yW":1
                 }
 
 # The human subjects that are included in training our model
@@ -38,11 +43,13 @@ unconditioned = [
                  ]
 
 
-# Load the data required for learning from the csv files under detected/
 def load_feature_data(test_subj, detected_dir = './detected', feature='detectionFrames', condition=0, test=False, evaluating=False, use_holdout=False, data_fold_idx=0):
-
-    print('Restoring image info from ', detected_dir)
+    # print('Restoring image info from ', detected_dir)
     subj_idxed_feature_data = {}
+    if use_holdout: print('Using holdout set!')
+    if evaluating: print('Evaluating!')
+
+    # list all the sub dirs of subjects under the data directory
     feature_dirs = [join(detected_dir, f) for f in os.listdir(detected_dir) if isdir(join(detected_dir, f))]
     subj_w_annotations = unconditioned 
     
@@ -85,7 +92,7 @@ def load_feature_data(test_subj, detected_dir = './detected', feature='detection
             if not episode_num in subj_idxed_feature_data[subj_id]:
                 subj_idxed_feature_data[subj_id][episode_num] = {}
             subj_idxed_feature_data[subj_id][episode_num][k] = pd.read_csv(feature_file, header=None)
-    
+
     return subj_idxed_feature_data
     
     
@@ -93,12 +100,15 @@ class FaceFeatureDataset(Dataset):
     """Face Feature dataset."""
 
     def __init__(self, subject_under_test='WkOsToXr9v', data_dir='detected/', target_idx=1, regression=False, 
-                       test=False, evaluating=False, use_holdout=False,
+                       test=False,  evaluating=False, use_holdout=False,
                        threshold_percentile=0,
                        balance_data=True,
                        frames_pre=2, frames_after=24,
+                       binary_classification=False,
                        include_delta_feature = False,
-                       data_fold_idx=0
+                       data_fold_idx=0,
+                       nofacs = False,
+                       nopose = False
                  ):
        
         """
@@ -116,6 +126,8 @@ class FaceFeatureDataset(Dataset):
             frames_after:       the number of aggregated frames after the current one in the window.
             include_delta_feature: whether to inlclude delta feature w.r.t the previous frame as an additional feature. Currently not used.
             data_fold_idx:      the index of the datafold to be loaded in the dataset.
+            nofacs:             whether to not include facs features.
+            nopose:             whether to not include pose features.
         """
         
         self.subject_under_test = subject_under_test
@@ -125,15 +137,21 @@ class FaceFeatureDataset(Dataset):
         self.feature_end_index = self.feature_start_index + self.feature_size
         self.threshold_percentile = threshold_percentile
         self.include_delta_feature = include_delta_feature
+        self.nofacs = nofacs
+        self.nopose = nopose
         
         self.targets_frames = {}
         for data_file_id in data_files:
             self.targets_frames[data_file_id] = pd.read_csv(data_files[data_file_id])
-        self.target_idx = target_idx
+        self.target_idx = target_idx 
+        self.binary_classification = binary_classification
 
         # Mappings to convert reward values to classes for training.
         if self.target_idx == 1:  
-            self.weight_mappings =  {-5:0, -1:1, 6:2, 0:3}
+            if self.binary_classification:
+                self.weight_mappings = {-5:0, -1:0, 6:1, 0:2}
+            else:
+                self.weight_mappings =  {-5:0, -1:1, 6:2, 0:3}
             self.binary_weight_mappings1 = {-5:0, -1:0, 6:1, 0:2}
             self.binary_weight_mappings2 = {-5:0, -1:1, 6:1, 0:2}
         elif self.target_idx == 2: 
@@ -142,7 +160,12 @@ class FaceFeatureDataset(Dataset):
         self.frames_pre = frames_pre
         self.frames_after = frames_after
         self.window_size = self.frames_pre + self.frames_after + 1
-        self.class_weights = list(np.ones(3))
+        if target_idx == 1 or target_idx > 2:
+            num_classes = 3
+        elif target_idx == 2:
+            num_classes = 2
+        self.class_weights = list(np.ones(num_classes)) if not self.binary_classification else list(np.ones(2))
+        self.binary_class_weights = list(np.ones(2))
         self.threshold = 0.0
        
         self.generate_training_data()
@@ -153,7 +176,6 @@ class FaceFeatureDataset(Dataset):
         
         
     def generate_training_data(self):
-    
         self.data_size = 0  
         self.processed_training_data = []
         self.targets_data = []
@@ -186,6 +208,10 @@ class FaceFeatureDataset(Dataset):
                                 data_idx.append(data_idx[-1])
 
                         img_feature = np.array(curr_dataframe.iloc[data_idx, self.feature_start_index:self.feature_end_index]).astype('float')
+                        if self.nopose: 
+                            for a_i in range(512+61+35,512+61+35+54): img_feature[:,a_i] = 0 
+                        if self.nofacs: 
+                            for a_i in range(512+61,512+61+35): img_feature[:,a_i] = 0 
                         annot_target =  np.array(curr_dataframe.iloc[data_idx, self.feature_end_index-10:self.feature_end_index]).astype('float')
                         event_mask = []
                         frame_num = int(curr_dataframe.iloc[idx, 0])
@@ -213,7 +239,7 @@ class FaceFeatureDataset(Dataset):
                         self.event_masks.append(np.array(event_mask))
                         self.subj_ids.append(subj_id)
                                     
-        # Convert to np array for better indexing.
+        # Convert to np array for better indexing
         self.processed_training_data = np.array(self.processed_training_data)
         self.targets_data = np.array(self.targets_data)
         self.reaction_levels = np.array(self.reaction_levels)
@@ -222,14 +248,15 @@ class FaceFeatureDataset(Dataset):
         self.annot_targets = np.array(self.annot_targets)
 
         # Filter classes, only keep the timesteps with non-zero rewards (events occurred).
-        sampled_indices = np.squeeze(np.argwhere(abs(self.targets_data) > 0))
+        if self.target_idx == 1:
+            sampled_indices = np.squeeze(np.argwhere(abs(self.targets_data) > 0))
 
-        self.processed_training_data = self.processed_training_data[sampled_indices]
-        self.targets_data = self.targets_data[sampled_indices]
-        self.reaction_levels = self.reaction_levels[sampled_indices]
-        self.event_masks = self.event_masks[sampled_indices]
-        self.subj_ids = self.subj_ids[sampled_indices]
-        self.annot_targets = self.annot_targets[sampled_indices]
+            self.processed_training_data = self.processed_training_data[sampled_indices]
+            self.targets_data = self.targets_data[sampled_indices]
+            self.reaction_levels = self.reaction_levels[sampled_indices]
+            self.event_masks = self.event_masks[sampled_indices]
+            self.subj_ids = self.subj_ids[sampled_indices]
+            self.annot_targets = self.annot_targets[sampled_indices]
 
         # Originally used for sampling data in which humans have high reaction levels.
         # Currently not used, keeping all reaction data.
@@ -302,5 +329,4 @@ class FaceFeatureDataset(Dataset):
             binary_labels1 = np.array(target) # just a placeholder, not used in regression
             binary_labels2 = np.array(target) # just a placeholder, not used in regression
 
-        return (img_feature, label, subj_id, event_mask, binary_labels1, binary_labels2, annot_target)
-        
+        return (img_feature, label, subj_id, event_mask, binary_labels1, binary_labels2, annot_target)    

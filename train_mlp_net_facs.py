@@ -38,10 +38,11 @@ def test_model(epoch, net, num_classes1, dataset, data_loader, regression, batch
         # Regression part is used for predicting other RL statistics such as Q-values and advantage.
         # For this paper, we only showed an instantiation using reward as target, so you should not use regression when running our code.
         if regression:           
-            outputs_mu, outputs_sigma, outputs_rec = net(img_features.float(), event_mask)
+            outputs_mu, outputs_sigma, annot_pred = net(img_features.float(), event_mask)
             dist = Normal(loc=outputs_mu, scale=outputs_sigma)
-            loss1 = 0.005*torch.mean(-dist.log_prob(labels.float()))
+            loss1 = torch.mean(-dist.log_prob(labels.float()))
             loss2 = mseLoss(outputs_mu.squeeze(), labels.float())
+            loss3 = mseLoss(annot_pred.squeeze(), annot_target.float())
         else:
             # loss1: cross entropy loss for 3 reward classes
             # loss2: binary cross entropy loss when lumping -5/-1 rewards into a single class of negative reward
@@ -53,10 +54,14 @@ def test_model(epoch, net, num_classes1, dataset, data_loader, regression, batch
             else:
                 outputs, annot_pred = net(img_features.float(), event_mask)                      
                 loss3 = mseLoss(annot_pred.squeeze(), annot_target.float())
-            
-            binary_outputs1 = torch.stack((torch.log(torch.sum(torch.exp(outputs[:,0:2]), dim=1)), outputs[:,2]), 1) 
-            binary_outputs2 = torch.stack((outputs[:,0], torch.log(torch.sum(torch.exp(outputs[:,1:3]), dim=1))), 1) 
-            
+
+            if num_classes1 == 3:
+                binary_outputs1 = torch.stack((torch.log(torch.sum(torch.exp(outputs[:,0:2]), dim=1)), outputs[:,2]), 1) 
+                binary_outputs2 = torch.stack((outputs[:,0], torch.log(torch.sum(torch.exp(outputs[:,1:3]), dim=1))), 1) 
+            else:
+                binary_outputs1 = outputs
+                binary_outputs2 = outputs
+
             if binary_loss_option == 1:
                 loss2 = ceLoss_test(binary_outputs1, binary_labels1.long())
             elif binary_loss_option == 2:
@@ -66,7 +71,7 @@ def test_model(epoch, net, num_classes1, dataset, data_loader, regression, batch
 
             loss1 = ceLoss_test(outputs, labels.long())
             _, predicted = torch.max(outputs.data, 1)
-  
+
         data_ct = labels.size(0)
         total += data_ct
         total_loss1 += loss1.data.item()*data_ct
@@ -84,15 +89,17 @@ def test_model(epoch, net, num_classes1, dataset, data_loader, regression, batch
         if validation:
             print('Log PDF Loss on validation set: %f' % avg_loss1)
             print('MSE on validation set: %f' % avg_loss2)
+            print('Aux Loss on validation set: %f' % avg_loss3)
         else:
             print('Log PDF Loss on test set: %f' % avg_loss1)
             print('MSE on test set: %f' % avg_loss2)
+            print('Aux Loss on test set: %f' % avg_loss3)
     else:
         model = 'network'
         if not fix_dist is None: model = 'fix_distribution'
         print('Cross Entropy Loss (Reward) of ' + model + ' on ' + set_name + ' set: %f' % avg_loss1)
         print('Cross Entropy Loss (Reward) of binary ' + model + ' on ' + set_name + ' set: %f' % avg_loss2)
-        print('MSE Loss (Reward) of ' + model + ' on ' + set_name + ' set: %f' % avg_loss3)
+        print('Aux Loss of ' + model + ' on ' + set_name + ' set: %f' % avg_loss3)
 
     if regression:
         return avg_loss2
@@ -100,19 +107,23 @@ def test_model(epoch, net, num_classes1, dataset, data_loader, regression, batch
         return avg_loss1
 
 # Hyper Parameters 
-num_epochs = 100
+num_epochs = 60
 batch_size = 8
-h_sizes=[16,32,16,16]
-embed_size=32
-dropout=0.4
+h_sizes=[128,128,64,8]
+embed_size=64
+dropout=0.63
+learning_rate = 0.001
 
-frames_pre=4
-frames_after=18
+frames_pre=0
+frames_after=12
+log_PDF_loss_weight = 0.005
 window_size = frames_pre + frames_after + 1
 
 apply_event_mask = False
-include_binary_loss = True
-include_aux_loss = True
+include_binary_loss = False
+include_aux_loss = True 
+binary_classification=False
+data_fold_idx = 0
 threshold_percentile = 0
 
 # binary_loss_option: select the way of lumping the rewards into binary classification.
@@ -122,14 +133,16 @@ binary_loss_option = 1
 # index of the target task statistic for predicting.
 # Each line in data file starts with timestep index of the episode.
 # Following: 1: reward; 2: optimality; 3: qval_opt; 4: qval_beh; 5: adv_opt; 6: adv_beh 7: suprise
-target_idx = 1 
+target_idx = 1
 if target_idx < 3: regression = False
 else: regression = True
-learning_rate = 0.002
 
 # The human subject ID you will train your model for.
 subject_under_test = sys.argv[1] 
-num_classes1 = 3
+if binary_classification or target_idx == 2:
+    num_classes1 = 2
+else:
+    num_classes1 = 3
 num_classes2 = 10 * window_size
 
 # Loss and Optimizer
@@ -137,11 +150,11 @@ ceLoss_train = nn.CrossEntropyLoss()
 ceLoss_test = nn.CrossEntropyLoss()
 mseLoss = nn.MSELoss()
 
-train_dataset = FaceFeatureDataset(subject_under_test=subject_under_test, target_idx=target_idx,  data_dir='detected/', threshold_percentile=threshold_percentile, regression=regression, frames_pre=frames_pre, frames_after=frames_after)
+train_dataset = FaceFeatureDataset(subject_under_test=subject_under_test, target_idx=target_idx,  data_dir='detected/', threshold_percentile=threshold_percentile, regression=regression, frames_pre=frames_pre, frames_after=frames_after, binary_classification=binary_classification, data_fold_idx=data_fold_idx)
 
-test_dataset = FaceFeatureDataset(subject_under_test=subject_under_test, target_idx=target_idx , test=True,  data_dir='detected/', threshold_percentile=threshold_percentile, balance_data=False, regression=regression, frames_pre=frames_pre, frames_after=frames_after)
+test_dataset = FaceFeatureDataset(subject_under_test=subject_under_test, target_idx=target_idx , test=True,  data_dir='detected/', threshold_percentile=threshold_percentile, balance_data=False, regression=regression, frames_pre=frames_pre, frames_after=frames_after, binary_classification=binary_classification, data_fold_idx=data_fold_idx)
 
-eval_dataset = FaceFeatureDataset(subject_under_test=subject_under_test, target_idx=target_idx , test=False,  data_dir='detected/', evaluating=True, use_holdout=False, threshold_percentile=threshold_percentile, balance_data=False, regression=regression, frames_pre=frames_pre, frames_after=frames_after)
+eval_dataset = FaceFeatureDataset(subject_under_test=subject_under_test, target_idx=target_idx , test=False,  data_dir='detected/', evaluating=True, use_holdout=False, threshold_percentile=threshold_percentile, balance_data=False, regression=regression, frames_pre=frames_pre, frames_after=frames_after, binary_classification=binary_classification, data_fold_idx=data_fold_idx)
 
 # Data Loader (Input Pipeline)
 if regression: 
@@ -198,13 +211,21 @@ for epoch in range(num_epochs):
         if regression:           
             outputs_mu, outputs_sigma, outputs_rec = net(img_features.float(), event_mask)
             dist = Normal(loc=outputs_mu, scale=outputs_sigma)
-            loss1 = 0.005*torch.mean(-dist.log_prob(labels.float()))
+            loss1 = torch.mean(-dist.log_prob(labels.float()))
             loss2 = mseLoss(outputs_mu.squeeze(), labels.float())
-            loss = loss1 + loss2
+            loss3 = mseLoss(outputs_rec, annot_targets.float())
+            if include_aux_loss: 
+                loss = log_PDF_loss_weight*loss1 + loss2 + loss3
+            else: 
+                loss = log_PDF_loss_weight*loss1 + loss2
         else:
-            outputs, outputs_rec = net(img_features.float(), event_mask)           
-            binary_outputs1 = torch.stack((torch.log(torch.sum(torch.exp(outputs[:,0:2]), dim=1)), outputs[:,2]), 1) 
-            binary_outputs2 = torch.stack((outputs[:,0], torch.log(torch.sum(torch.exp(outputs[:,1:3]), dim=1))), 1)  
+            outputs, outputs_rec = net(img_features.float(), event_mask)
+            if target_idx == 1:
+                binary_outputs1 = torch.stack((torch.log(torch.sum(torch.exp(outputs[:,0:2]), dim=1)), outputs[:,2]), 1) 
+                binary_outputs2 = torch.stack((outputs[:,0], torch.log(torch.sum(torch.exp(outputs[:,1:3]), dim=1))), 1)
+            else:
+                binary_outputs1 = outputs
+                binary_outputs2 = outputs
             
             if binary_loss_option == 1:
                 loss2 = ceLoss_train(binary_outputs1, binary_labels1.long())
@@ -226,10 +247,10 @@ for epoch in range(num_epochs):
         optimizer.step()
         if (i+1) % 20 == 0:
             if regression:
-                 print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f, LogPDF_Loss: %.4f, Auxiliary_Loss: %.4f' 
-               %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data.item(), loss1.data.item(), loss2.data.item()))
+                print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f, LogPDF_Loss: %.4f, MSE_Loss: %.4f, Aux_Loss: %.4f' 
+               %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data.item(), loss1.data.item(), loss2.data.item(), loss3.data.item()))
             else:
-                print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f, Classification_Loss: %.4f, Binary_Classification_Loss: %.4f, Auxiliary_loss: %.4f' 
+                print ('Epoch [%d/%d], Step [%d/%d], Loss: %.4f, Classification_Loss: %.4f, Binary_Classification_Loss: %.4f, Aux_loss: %.4f' 
                %(epoch+1, num_epochs, i+1, len(train_dataset)//batch_size, loss.data.item(), loss1.data.item(),  loss2.data.item(), loss3.data.item()))
 
 torch.save(best_model_wts, 'MLP_facs_reward_models/'+subject_under_test+'_'+str(np.round(lowest_loss,4))+'.pkl')
