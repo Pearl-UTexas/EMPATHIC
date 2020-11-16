@@ -2,7 +2,7 @@
 
 Yuchen Cui*, Qiping Zhang*, Alessandro Allievi, Peter Stone, Scott Niekum, W. Bradley Knox
 
-<p align="left">
+<p align="center">
   <a href="https://arxiv.org/abs/2009.13649">View paper on ArXiv</a> |
   <a href="https://sites.google.com/utexas.edu/empathic">Project Website</a>
 </p>
