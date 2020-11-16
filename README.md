@@ -2,7 +2,7 @@
 
 Yuchen Cui*, Qiping Zhang*, Alessandro Allievi, Peter Stone, Scott Niekum, W. Bradley Knox
 
-<p align="left">
+<p align="center">
   <a href="https://arxiv.org/abs/2009.13649">View paper on ArXiv</a> |
   <a href="https://sites.google.com/utexas.edu/empathic">Project Website</a>
 </p>
@@ -72,7 +72,7 @@ Download the pre-processed dataset from [here](https://drive.google.com/file/d/1
 python train_mlp_net_facs.py WkOsToXr9v
 ```
 
-This will generate a model file "WkOsToXr9v_model.pkl" of the trained MLP in the directory MLP_facs_reward_models/, for testing on the human subject data with ID "WkOsToXr9v". 
+This will generate a model file "WkOsToXr9v_[lowest_test_loss].pkl" of the trained MLP in the directory MLP_facs_reward_models/, for testing on the human subject data with ID "WkOsToXr9v". 
 
 Note that if you would like to train a model for another subject, you need to make sure the processed data of that subject already exists in a subdirectory with the name of his/her ID, under the folder detected/. 
 
@@ -83,7 +83,7 @@ Per-subject models are used for random search of hyper-parameters.
 python train_mlp_net_facsall.py 
 ```
 
-This will generate a model file "all_subjects_model.pkl" of the trained MLP in the directory MLP_facs_reward_models/. 
+This will generate a model file "allsubjects_[lowest_test_loss].pkl" of the trained MLP in the directory MLP_facs_reward_models/. 
 
 The trained model is used for evaluating data in holdout set.
 

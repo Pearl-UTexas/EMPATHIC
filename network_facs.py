@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 # Neural Network Model (1 hidden layer)
 class Net(nn.Module):
-    def __init__(self, input_size=1024, embed_size=32, h_sizes=[16,32,16,16], window_size=2+24+1, num_classes1=3, num_classes2=98, dropout=0.4, feature_divisions = [512,61,35,54,40,10], apply_event_mask = False, regression = False, include_delta_feature = False):
+    def __init__(self, input_size=1024, embed_size=32, h_sizes=[16,32,16,16], window_size=2+24+1, num_classes1=3, num_classes2=98, dropout=0.4, feature_divisions = [512,61,35,54,40,10], apply_event_mask = False, regression = False, include_delta_feature = False, include_lmk=False):
         super(Net, self).__init__()
         
         self.input_size = input_size
@@ -23,9 +23,15 @@ class Net(nn.Module):
         self.include_delta_feature = include_delta_feature
         self.h_sizes = h_sizes
         self.regression = regression
+        self.include_lmk = include_lmk
 
+        input_dim = 0
+        if self.include_lmk:
+            self.lmk_input = nn.Linear(feature_divisions[1]*window_size, embed_size)
+            input_dim += embed_size
+        
         self.facs_input = nn.Linear(feature_divisions[2]*window_size, embed_size)
-        input_dim = embed_size
+        input_dim += embed_size
         self.pose_input = nn.Linear(feature_divisions[3]*window_size, embed_size//2)
         input_dim += embed_size//2
 
@@ -69,6 +75,10 @@ class Net(nn.Module):
         self.init_weights()
 
     def init_weights(self):
+        if self.include_lmk: torch.nn.init.kaiming_uniform_(self.lmk_input.weight)
+        torch.nn.init.kaiming_uniform_(self.facs_input.weight)
+        torch.nn.init.kaiming_uniform_(self.pose_input.weight)
+
         for i in range(len(self.hidden)): 
             if isinstance(self.hidden[i], nn.Linear):
                 torch.nn.init.kaiming_uniform_(self.hidden[i].weight)
@@ -86,12 +96,18 @@ class Net(nn.Module):
 
     def forward(self, src, mask):
         feat_idx = 1
+        
+        # Encode lmk_dist features
         feat_idx += 1
-
+        if self.include_lmk:
+            lmk_feat = src[:,:,sum(self.feature_divisions[0:feat_idx-1]):sum(self.feature_divisions[0:feat_idx])]
+            lmk_shape = lmk_feat.shape
+            lmk_out = self.lmk_input(lmk_feat.reshape(lmk_shape[0],lmk_shape[1]*lmk_shape[2]))
+        
         # Encode facs features
         feat_idx += 1
         input_feat = src[:,:,sum(self.feature_divisions[0:feat_idx-1]):sum(self.feature_divisions[0:feat_idx])]
-        
+
         # Encode pose features
         feat_idx += 1
         pose_feat = src[:,:,sum(self.feature_divisions[0:feat_idx-1]):sum(self.feature_divisions[0:feat_idx])]
@@ -120,7 +136,8 @@ class Net(nn.Module):
             if self.include_delta_feature:
                 output = torch.cat((facs_out, delta_facs_out),dim=1)
             else:
-                output = torch.cat((facs_out, pose_out),dim=1)
+                if self.include_lmk: output = torch.cat((lmk_out,facs_out,pose_out),dim=1)
+                else: output = torch.cat((facs_out, pose_out),dim=1)
 
         h_ct = 0
         for h in self.hidden: 
@@ -131,7 +148,7 @@ class Net(nn.Module):
         if self.regression:
             out_mu = self.out_mu(output)
             out_sigma = torch.abs(self.out_sigma(output))
-            return (out_mu, out_sigma, None)
+            return (out_mu, out_sigma, output_rec)
         else:
             out = self.out(output)
             return (out, output_rec)

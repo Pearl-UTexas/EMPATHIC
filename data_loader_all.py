@@ -25,10 +25,14 @@ condition_dic = {
     "pKH0e6bBIo":0,    "G4fUr3vTFO":0,    "Oz4PI7OLOi":0,    "YBVcCZS7fy":0,
     "6cMbVYpG00":0,    "fYWPkRcKi1":0,    "BDRiXPwtNf":0,    "WkOsToXr9v":0,
     "S6Zghgggo4":0,    "Kpd16ANmf3":0,    "SoQ2uxHSHw":0,    "oI7RlzkU2k":0,
-    "2iA4jV97rl":0
+    "2iA4jV97rl":0,    "J4LTGkh8bC":1,    "tcJ5dqCJkz":1,    "eneTslHMcV":1,
+    "Z2pZR2LQxg":1,    "3gCI2rjrdp":1,    "B9ASGFKtcI":1,    "GHiCGHgING":1,
+    "5uKjBzbCUY":1,    "fNzfYRiG2Q":1,    "8EwwxdFc3G":1,    "1JIuegvQCL":1,
+    "eBIJoBu3xw":1,    "NvWqZhMTIr":1,    "Gm2fspTh0O":1,    "SYf80nuPOV":1,
+    "gSSEPyUoeT":1,    "xNWYOcsU9X":1,    "2Lk7llB0CT":1,    "bo3OrtQR5v":1,
+    "qU8Frq52yW":1
                 }
 
-# The human subjects that are included in training our model
 unconditioned = [
     "NUmTnWWjX6",    "4bzq92vQGe",    "lxJtNRlUAs",    "J3sGDFKNx5",
     "pKH0e6bBIo",    "G4fUr3vTFO",    "Oz4PI7OLOi",    "YBVcCZS7fy",
@@ -43,30 +47,34 @@ def load_feature_data(test_subj, detected_dir = './detected', feature='detection
 
     print('Restoring image info from ', detected_dir)
     subj_idxed_feature_data = {}
+    if use_holdout: print('Using holdout set!')
+
+    # list all the sub dirs of subjects under the data directory
     feature_dirs = [join(detected_dir, f) for f in os.listdir(detected_dir) if isdir(join(detected_dir, f))]
     subj_w_annotations = unconditioned 
-    
     
     for feature_dir in feature_dirs:
         subj_id = feature_dir.strip().split('/')[-1]
         if not subj_id in subj_w_annotations: continue
         if condition_dic[subj_id] != condition: continue
         if evaluating and subj_id != test_subj: continue
-        if use_holdout and subj_id != test_subj: continue
-       
+
         # compute aggregated frame indexes
         hash_num = sum([ord(test_subj[ch_idx]) for ch_idx in range(len(test_subj))]) + sum([ord(subj_id[ch_idx]) for ch_idx in range(len(subj_id))])
         hash_test_idx = hash_num % 4
         
         subj_idxed_feature_data[subj_id] = {}
+        
         # list all the episodes under the file
         feature_files = [join(feature_dir, f) for f in os.listdir(feature_dir) if isfile(join(feature_dir, f))]
         for feature_file in feature_files:
             # Looking for subjid_episode_n_detectionFrames_k.csv 
             info = feature_file.strip().split('/')[-1].split('.')[0].split('_')
             if (not use_holdout) and info[-1] == 'holdout': continue # let ALONE the holdout set!
+            if use_holdout and info[-1] != 'holdout': continue # ONLY use the holdout set!
             if info[-2] != feature:  continue # check file postfix
             if info[1] != 'episode': continue # check file category
+            # -> testing set: k = 0; training set: k = 1,2,3
             if not use_holdout:
                 k = int(info[-1])
                 if test: 
@@ -80,7 +88,11 @@ def load_feature_data(test_subj, detected_dir = './detected', feature='detection
             if not episode_num in subj_idxed_feature_data[subj_id]:
                 subj_idxed_feature_data[subj_id][episode_num] = {}
             subj_idxed_feature_data[subj_id][episode_num][k] = pd.read_csv(feature_file, header=None)
-    
+    '''        
+    for subj in subj_idxed_feature_data.keys():
+        print(subj, subj_idxed_feature_data[subj].keys())
+        print([subj_idxed_feature_data[subj][e_num].keys() for e_num in subj_idxed_feature_data[subj]])
+    '''
     return subj_idxed_feature_data
     
     
@@ -92,6 +104,7 @@ class FaceFeatureDataset(Dataset):
                        threshold_percentile=0,
                        balance_data=True,
                        frames_pre=2, frames_after=24,
+                       binary_classification=False,
                        include_delta_feature = False
                  ):
        
@@ -108,11 +121,12 @@ class FaceFeatureDataset(Dataset):
             balance_data:       whether to balance the data instances based on class distribution.
             frames_pre:         the number of aggregated frames before the current one in the window.
             frames_after:       the number of aggregated frames after the current one in the window.
+            binary_classification: whether to only make binary classification over 3 classes.
             include_delta_feature: whether to inlclude delta feature w.r.t the previous frame as an additional feature. Currently not used.
         """
         
         self.subject_under_test = subject_under_test
-        self.subj_idxed_feature_frames = load_feature_data(subject_under_test, detected_dir=data_dir, condition=condition_dic[subject_under_test], test=test, evaluating=evaluating, use_holdout=use_holdout)
+        self.subj_idxed_feature_frames = load_feature_data(subject_under_test, detected_dir=data_dir, condition=condition_dic[subject_under_test], test=test, evaluating=evaluating, use_holdout=use_holdout)       
         self.feature_start_index = 2        
         self.feature_size = 512 + 61 + 35 + 54 + 40 + 10
         self.feature_end_index = self.feature_start_index + self.feature_size
@@ -123,18 +137,28 @@ class FaceFeatureDataset(Dataset):
         for data_file_id in data_files:
             self.targets_frames[data_file_id] = pd.read_csv(data_files[data_file_id])
         self.target_idx = target_idx
+        self.binary_classification = binary_classification
 
         # Mappings to convert reward values to classes for training.
         if self.target_idx == 1:  
-            self.weight_mappings =  {-5:0, -1:1, 6:2, 0:3}
-            self.binary_weight_mappings = {-5:0, -1:0, 6:1, 0:2}
+            if self.binary_classification:
+                self.weight_mappings = {-5:0, -1:0, 6:1, 0:2}
+            else:
+                self.weight_mappings =  {-5:0, -1:1, 6:2, 0:3}
+            self.binary_weight_mappings1 = {-5:0, -1:0, 6:1, 0:2}
+            self.binary_weight_mappings2 = {-5:0, -1:1, 6:1, 0:2}
         elif self.target_idx == 2: 
             self.weight_mappings =  {0:0, 1:1}
                 
         self.frames_pre = frames_pre
         self.frames_after = frames_after
         self.window_size = self.frames_pre + self.frames_after + 1
-        self.class_weights = list(np.ones(3))
+        if target_idx == 1 or target_idx > 2:
+            num_classes = 3
+        elif target_idx == 2:
+            num_classes = 2
+        self.class_weights = list(np.ones(num_classes)) if not self.binary_classification else list(np.ones(2))
+        self.binary_class_weights = list(np.ones(2))
         self.threshold = 0.0
        
         self.generate_training_data()
@@ -205,7 +229,7 @@ class FaceFeatureDataset(Dataset):
                             self.processed_training_data.append(np.concatenate((img_feature, delta_feature), axis=0))
                         else:
                             self.processed_training_data.append(img_feature)
-
+                        
                         self.annot_targets.append(annot_target.flatten())
                         tar_idx = int(curr_dataframe.iloc[idx, 0])
                         self.targets_data.append(int(targets_frame.iloc[tar_idx, self.target_idx]))
@@ -213,7 +237,7 @@ class FaceFeatureDataset(Dataset):
                         self.event_masks.append(np.array(event_mask))
                         self.subj_ids.append(subj_id)
                                     
-        # Convert to np array for better indexing.
+        # Convert to np array for better indexing
         self.processed_training_data = np.array(self.processed_training_data)
         self.targets_data = np.array(self.targets_data)
         self.reaction_levels = np.array(self.reaction_levels)
@@ -222,18 +246,19 @@ class FaceFeatureDataset(Dataset):
         self.annot_targets = np.array(self.annot_targets)
 
         # Filter classes, only keep the timesteps with non-zero rewards (events occurred).
-        sampled_indices = np.squeeze(np.argwhere(abs(self.targets_data) > 0))
+        if self.target_idx == 1:
+            sampled_indices = np.squeeze(np.argwhere(abs(self.targets_data) > 0))
 
-        self.processed_training_data = self.processed_training_data[sampled_indices]
-        self.targets_data = self.targets_data[sampled_indices]
-        self.reaction_levels = self.reaction_levels[sampled_indices]
-        self.event_masks = self.event_masks[sampled_indices]
-        self.subj_ids = self.subj_ids[sampled_indices]
-        self.annot_targets = self.annot_targets[sampled_indices]
+            self.processed_training_data = self.processed_training_data[sampled_indices]
+            self.targets_data = self.targets_data[sampled_indices]
+            self.reaction_levels = self.reaction_levels[sampled_indices]
+            self.event_masks = self.event_masks[sampled_indices]
+            self.subj_ids = self.subj_ids[sampled_indices]
+            self.annot_targets = self.annot_targets[sampled_indices]
 
         # Originally used for sampling data in which humans have high reaction levels.
         # Currently not used, keeping all reaction data.
-        # Get the threshold by percentile
+        # Get the threshold by percentile.
         if self.threshold_percentile > 0:
             self.threshold = 0.5
             sampled_indices = np.squeeze(np.argwhere(self.reaction_levels > self.threshold))
@@ -285,13 +310,21 @@ class FaceFeatureDataset(Dataset):
         event_mask = self.event_masks[idx]        
         target = self.targets_data[idx]
         subj_id = self.subj_ids[idx]
-        binary_labels = None
+        binary_labels1 = None
+        binary_labels2 = None
         annot_target = self.annot_targets[idx]
 
-        if self.target_idx == 1 or self.target_idx == 2: 
+        if self.target_idx == 1 or self.target_idx == 2:
             label = np.array(self.weight_mappings[target]).astype('long')
-            binary_labels = np.array(self.binary_weight_mappings[target]).astype('long')
-        else: 
+            if self.target_idx == 1:
+                binary_labels1 = np.array(self.binary_weight_mappings1[target]).astype('long')
+                binary_labels2 = np.array(self.binary_weight_mappings2[target]).astype('long')
+            else:
+                binary_labels1 = np.array(target).astype('long')
+                binary_labels2 = np.array(target).astype('long')
+        else:
             label = np.array(target)
+            binary_labels1 = np.array(target) # just a placeholder
+            binary_labels2 = np.array(target) # just a placeholder
 
-        return (img_feature, label, subj_id, event_mask, binary_labels, annot_target)
+        return (img_feature, label, subj_id, event_mask, binary_labels1, binary_labels2, annot_target)    
