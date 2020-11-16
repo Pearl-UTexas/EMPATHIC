@@ -7,7 +7,7 @@ import sys, os
 import numpy as np
 
 import os
-sys.path.insert(1, "/home/yuchen/projects/RoboTaxiEnv")
+sys.path.insert(1, "./RobotaxiEnv")
 
 from robotaxi.gameplay.environment import Environment
 from robotaxi.gui import PyGameGUI
