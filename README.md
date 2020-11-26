@@ -18,11 +18,12 @@ This repository contains code used to conduct experiments reported in the paper 
 
 If you find this repository is useful in your research, please cite the paper:
 ```
-@article{cui2020empathic,
+@inproceedings{cui2020empathic,
   title={The EMPATHIC Framework for Task Learning from Implicit Human Feedback},
   author={Cui, Yuchen and Zhang, Qiping and Allievi, Alessandro and Stone, Peter and Niekum, Scott and Knox, W Bradley},
-  journal={arXiv preprint arXiv:2009.13649},
-  year={2020}
+  booktitle={Conference on Robot Learning},
+  year={2020},
+  organization={PMLR}
 }
 ```
 
