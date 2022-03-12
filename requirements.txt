@@ -9,4 +9,4 @@ scikit-image
 sklearn
 seaborn
 pyaudio
-pillow==6.1
+pillow==9.0.1
